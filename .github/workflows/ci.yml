@@ -1,17 +1,31 @@
 name: CI Pipeline
+
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
 
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      packages: write 
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Build Docker image
-        run: docker build -t my-simple-nginx .
+
+        run: |
+          # Переводимо назву репозиторію в нижній регістр (вимога Docker)
+          REPO_LOWERCASE=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          docker build -t ghcr.io/$REPO_LOWERCASE/my-simple-nginx:latest .
+
+      - name: Push Docker image
+        run: |
+          REPO_LOWERCASE=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          docker push ghcr.io/$REPO_LOWERCASE/my-simple-nginx:latest
