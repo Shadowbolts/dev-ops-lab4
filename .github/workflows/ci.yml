@@ -46,7 +46,7 @@ jobs:
           IMAGE_NAME="ghcr.io/$REPO_LOWERCASE/my-simple-nginx:latest"
           ssh -i ~/.ssh/id_rsa bibos@192.168.0.2 "
             echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull \$IMAGE_NAME
+            docker pull $IMAGE_NAME
             docker stop my-nginx-app || true
             docker rm my-nginx-app || true
             docker run -d --name my-nginx-app -p 80:80 \$IMAGE_NAME
