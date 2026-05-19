@@ -7,21 +7,18 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    
     permissions:
       contents: read
       packages: write 
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        
       - name: Build Docker image
-
         run: |
-          # Переводимо назву репозиторію в нижній регістр (вимога Docker)
           REPO_LOWERCASE=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           docker build -t ghcr.io/$REPO_LOWERCASE/my-simple-nginx:latest .
 
@@ -29,3 +26,28 @@ jobs:
         run: |
           REPO_LOWERCASE=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           docker push ghcr.io/$REPO_LOWERCASE/my-simple-nginx:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: self-hosted
+    steps:
+      - name: Setup SSH environment
+        env:
+          SSH_PRIVATE_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_B64 }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY_B64" | base64 --decode > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan 192.168.0.2 >> ~/.ssh/known_hosts
+
+      - name: Deploy to Test Server
+        run: |
+          REPO_LOWERCASE=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_NAME="ghcr.io/$REPO_LOWERCASE/my-simple-nginx:latest"
+          ssh -i ~/.ssh/id_rsa bibos@192.168.0.2 "
+            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker pull \$IMAGE_NAME
+            docker stop my-nginx-app || true
+            docker rm my-nginx-app || true
+            docker run -d --name my-nginx-app -p 80:80 \$IMAGE_NAME
+          "
